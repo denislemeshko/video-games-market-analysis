@@ -5,12 +5,26 @@ import plotly.express as px
 import pandas as pd
 
 
-df = pd.read_csv('games.csv')
-# Предобработка
-df = df[(df['Year_of_Release'] >= 2000) & (df['User_Score'] != 'tbd')]
+
+# Загрузка датасета
+df = pd.read_csv('vgsales.csv', encoding='ISO-8859-1')
+
+# === Предобработка (исправлено под vgsales) ===
+# В vgsales столбец называется 'Year', а не 'Year_of_Release'
+# User_Score и Critic_Score в vgsales отсутствуют
+
+# Фильтр: только игры с 2000 года и с известным годом
+df = df[df['Year'] >= 2000]
+
+# Удаляем строки с пропусками
 df = df.dropna(how='any')
-df['Year_of_Release'] = df['Year_of_Release'].astype(int)
-df['User_Score'] = df['User_Score'].astype(float)
+
+# Приводим Year к целому числу
+df['Year'] = df['Year'].astype(int)
+
+# Проверка
+print("Строк после фильтра:", len(df))
+print(df.head())
 
 # Инициализируем Dash
 app = Dash(__name__)
@@ -27,14 +41,13 @@ app.layout = html.Div([
         'margin-bottom': '10px',
         'text-decoration': 'underline',
     })),
-    html.Div(html.H4('В этом дашборде можно выбрать жанры, рейтинг, а также интервал годов выпуска', style={
+    html.Div(html.H4('В этом дашборде можно выбрать жанры, платформы, а также интервал годов выпуска', style={
         'text-align': 'center',
         'font-family': 'Open Sans, serif',
         'font-size': '24px',
         'color': '#444',
         'margin-bottom': '20px',
     })),
-
     html.Div([
         html.Label('Выбор жанра'),
         dcc.Checklist(
@@ -46,15 +59,14 @@ app.layout = html.Div([
     ], style={'width': '45%', 'display': 'inline-block'}),
 
     html.Div([
-        html.Label('Выбор рейтинга'),
+        html.Label('Выбор платформы'),
         dcc.Checklist(
-            id='Rating',
-            options=[{'label': rating, 'value': rating} for rating in df['Rating'].unique().tolist()],
-            value=df['Rating'].unique().tolist(),
+            id='Platform',
+            options=[{'label': platform, 'value': platform} for platform in df['Platform'].unique().tolist()],
+            value=df['Platform'].unique().tolist(),
             labelStyle={'display': 'inline-block', 'color': '#444'}
         )
     ], style={'width': '49%', 'float': 'right', 'display': 'inline-block'}),
-
     html.Div(
         id='chosen',
         style={
@@ -79,12 +91,12 @@ app.layout = html.Div([
 
     html.Div([
         dcc.RangeSlider(
-            min=min(df['Year_of_Release']),
-            max=max(df['Year_of_Release']),
+            min=min(df['Year']),
+            max=max(df['Year']),
             step=None,
             value=[2005, 2014],
             id='year',
-            marks={str(year): str(year) for year in df['Year_of_Release'].unique()}
+            marks={str(year): str(year) for year in df['Year'].unique()}
         ),
         html.Div(id='output-container-range-slider')
     ])
@@ -95,25 +107,33 @@ app.layout = html.Div([
     Output(component_id='chosen', component_property='children'),
     Output(component_id='stack_graph', component_property='figure'),
     Output(component_id='scatter', component_property='figure'),
-    Input(component_id='Rating', component_property='value'),
+    Input(component_id='Platform', component_property='value'),
     Input(component_id='Genre', component_property='value'),
     Input(component_id='year', component_property='value')
 )
-def update_graph(rating, genre, year):
+def update_graph(platform, genre, year):
     # Применение выбранных фильтров
-    filtered_df = df[(df['Rating'].isin(rating)) &
+    filtered_df = df[(df['Platform'].isin(platform)) &
                      (df['Genre'].isin(genre)) &
-                     (df['Year_of_Release'] > year[0]) &
-                     (df['Year_of_Release'] < year[1])]
+                     (df['Year'] >= year[0]) &
+                     (df['Year'] <= year[1])]
 
 
     stacked_df = pd.DataFrame(
-        filtered_df.groupby(['Year_of_Release', 'Platform'])['Name'].count()
+        filtered_df.groupby(['Year', 'Platform'])['Name'].count()
     ).reset_index()
 
-    fig_1 = px.area(stacked_df, x='Year_of_Release', y='Name', color='Platform', line_group='Platform')
+    fig_1 = px.area(stacked_df, x='Year', y='Name', color='Platform', line_group='Platform')
 
-    fig_2 = px.scatter(filtered_df, x='User_Score', y='Critic_Score', color='Genre')
+    # В vgsales нет User_Score и Critic_Score — используем продажи
+    fig_2 = px.scatter(
+        filtered_df,
+        x='NA_Sales',
+        y='Global_Sales',
+        color='Genre',
+        hover_data=['Name', 'Platform'],
+        title='Продажи в Северной Америке vs Глобальные'
+    )
 
     return f'Выбрано {len(filtered_df)} игр', fig_1, fig_2
 
@@ -121,3 +141,4 @@ def update_graph(rating, genre, year):
 # Запуск
 if __name__ == '__main__':
     app.run(debug=True)
+
