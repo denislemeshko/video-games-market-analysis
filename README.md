@@ -21,7 +21,7 @@ The analysis focuses on questions such as:
 ---
 
 ## 📈 Interactive Dashboard
-
+![Interactive Dashboard](dashboard-preview.png)
 The dashboard provides interactive filters for:
 
 - **Genre**
